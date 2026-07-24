@@ -4,7 +4,7 @@ A **self-hosted OpenAI-compatible AI gateway** designed specifically for **local
 
 The gateway presents a **single, stable OpenAI-compatible API endpoint**, allowing applications such as **Odysseus** to connect **without any modifications, plugins, or code changes**. From the client's perspective, it behaves exactly like a standard OpenAI API server while transparently selecting, starting, stopping, and proxying requests to the appropriate local model.
 
-> This project was generated with **GPT 5.6 Terra**.
+> This project was generated with multiple locally hosted llm models and agents.
 
 ---
 
