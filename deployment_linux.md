@@ -144,17 +144,7 @@ All tests should pass. If you added new features, add corresponding tests.
 | ImportError: `pydantic` not found | Dependencies not installed | `pip install -r requirements.txt` |
 
 ---
-## 9. Optional – Docker Deployment
-
-If you prefer containerization, a minimal Dockerfile is provided in the repo root. Build and run:
-
-```bash
-docker build -t router:latest .
-docker run -d -p 8000:8000 --env-file .env router:latest
-```
-
----
-## 10. Summary
+## 9. Summary
 
 1. Install prerequisites.
 2. Clone repo & set up venv.
