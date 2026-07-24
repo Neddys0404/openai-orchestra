@@ -34,7 +34,7 @@ models:
       -c 1024
       -ngl 0
 
-  gemma-4-26B_q4_0-it:
+  chat:
     endpoint: "http://localhost:8001/v1"
     timeout: 600
     health_path: "/models"
@@ -54,7 +54,7 @@ models:
       --cache-type-k q8_0
       --cache-type-v q8_0
 
-  qwen3.5-4B-super-coder:
+  coder:
     endpoint: "http://localhost:8002/v1"
     timeout: 600
     health_path: "/models"
@@ -106,13 +106,13 @@ image_generation:
 
 routes:
   coder:
-    model: qwen3.5-4B-super-coder
+    model: coder
     keywords: ["code", "program", "bug", "python", "javascript", "typescript", "docker", "git", "api", "cpp", "c++", "cmake", "esp-idf", "esp32", "bash", "shell", "systemd"]
   chat:
-    model: gemma-4-26B_q4_0-it
+    model: chat
     keywords: []
   image_gen:
-    model: gemma-4-26B_q4_0-it
+    model: chat
     keywords: ["draw", "create an image", "generate an image", "concept art", "portrait", "illustration", "logo", "artwork", "render"]
 
 tools:
