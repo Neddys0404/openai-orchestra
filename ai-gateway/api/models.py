@@ -24,8 +24,8 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     n: int | None = None
     temperature: float | None = None
-	top_p: float | None = None
-	max_tokens: int | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
 
@@ -40,8 +40,8 @@ class CompletionRequest(BaseModel):
     model: str = Field(..., description="Explicit model name.")
     prompt: str = Field(..., min_length=1)
 	temperature: float | None = None
-	top_p: float | None = None
-	max_tokens: int | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
     n: int = 1
     stream: bool = False
 
