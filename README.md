@@ -40,31 +40,70 @@ Allowlist-based execution of local system tools:
 The request flow is designed for minimal latency and maximum intelligence:
 
 ```text
-                  Odysseus or another OpenAI-compatible client
-                               |
-                +--------------+---------------+-----------------+
-                |                              |                 |
-          Chat / Coder API               Image Gen API       Other APIs
-         (v1/chat/...)                (v1/images/...)     (/health, /tools)
-                |                              |                 |
-                v                              v                 v
-      +-----------------------+      +-------------------+  [Passthrough]
-      |                       |      |                   |
-      |    LLM Classifier     |      | Prompt Refiner    |
-      |   (CPU, persistent)   |      | (via Chat Model)  |
-      |                       |      |                   |
-      +-----------+-----------+      +---------+---------+
-                  |                            |
-                  +------------+               |
-                               |               |
-                    Model Lifecycle Manager    |
-                               |               |
-                +--------------+---------------+
-                |              |               |
-                v              v               v
-           Chat Server     Coder Server     Image Backend
-           (llama.cpp)      (llama.cpp)     (sd-cli/diff)
-           GPU, on demand  GPU, on demand   GPU, on demand
+                                   OpenAI-Compatible Clients
+                     (Odysseus, Continue, VSCode, OpenAI SDK, etc.)
+                                             |
+              +------------------------------+------------------------------+
+              |                              |                              |
+              |                              |                              |
+              /v1/chat/completions         /v1/completions          /v1/images/generations
+              |                              |                              |
+              |                              |                              |
+              |                              |                     Authorization
+              |                              |                              |
+              +--------------------+---------+                              |
+                                   |                                        |
+                            Authorization                             Request Queue
+                                   |                                        |
+                            Request Queue                             Model Manager
+                                   |                                        |
+                            Session Manager                                 |
+                                   |                                        |
+                     +-----------+-----------+                              |
+                     |                       |                              |
+              Explicit model?           Auto / Gateway                      |
+                     |                       |                              |
+                     |                Intent Classifier                     |
+                     |                (CPU Persistent)                      |
+                     |                       |                              |
+                     |                Router Manager                        |
+                     |                       |                              |
+                     +-----------+-----------+                              |
+                                   |                                        |
+                     +-----------+------------+                             |
+                     |                        |                             |
+                 Chat/Coder            Image Intent                         |
+                     |                        |                             |
+                     |                Prompt Refiner                        |
+                     |                (Chat Model)                          |
+                     |                        |                             |
+                     |                Refined Prompt                        |
+                     |                        |                             |
+                     |                        |                             |
+            Model Lifecycle Manager           |                             |
+       (Start / Stop / Cache / GPU)           |                             |
+                     |                        |                             |
+      +--------------+---------------+        |                             |
+      |                              |        |                             |
+      v                              v        |                             |
+ Chat Server                   Coder Server   |                             |
+ (llama.cpp)                   (llama.cpp)    |                             |
+      |                              |        |                             |
+      +---------------+--------------+        |                             |
+                      |                       |                             |
+                      |                       +-----------------------------+
+                      |                       |
+                      |                       v
+                      |                Image Backend
+                      |            (sd-cli / FLUX / etc.)
+                      |                       |
+                      |               PNG / Base64 / URL
+                      |                       |
+                      |                       |
+                      |                       |
+                      +------------+----------+
+                                   |
+                            OpenAI Response
 ```
 
 ---
