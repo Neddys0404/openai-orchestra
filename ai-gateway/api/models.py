@@ -22,12 +22,12 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = Field(None, description="Explicit model name or 'auto' for classifier routing.")
     messages: List[Message] = Field(..., min_items=1)
     stream: bool = False
-    n: int = 1
-    temperature: float = 1.0
-    top_p: float = 1.0
-    max_tokens: Optional[int]
-    presence_penalty: float = 0.0
-    frequency_penalty: float = 0.0
+    n: int | None = None
+    temperature: float | None = None
+	top_p: float | None = None
+	max_tokens: int | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
 
     @validator("n")
     def _positive_n(cls, v):
@@ -39,9 +39,9 @@ class ChatCompletionRequest(BaseModel):
 class CompletionRequest(BaseModel):
     model: str = Field(..., description="Explicit model name.")
     prompt: str = Field(..., min_length=1)
-    max_tokens: Optional[int]
-    temperature: float = 1.0
-    top_p: float = 1.0
+	temperature: float | None = None
+	top_p: float | None = None
+	max_tokens: int | None = None
     n: int = 1
     stream: bool = False
 
