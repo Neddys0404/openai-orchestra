@@ -69,7 +69,9 @@ The request flow is designed for minimal latency and maximum intelligence:
 
 ---
 
-## 📦 Installation & Running
+## 📦 Installation & Running Wizthout Persistent Setup
+
+For persistent setup please refer to /ai-gateway/README.md.
 
 ### Prerequisites
 - **Python 3.10+**
