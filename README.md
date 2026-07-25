@@ -108,7 +108,7 @@ The request flow is designed for minimal latency and maximum intelligence:
 
 ---
 
-## 📦 Installation & Running Wizthout Persistent Setup
+## 📦 Installation & Running Without Persistent Setup
 
 For persistent setup please refer to /ai-gateway/README.md.
 
