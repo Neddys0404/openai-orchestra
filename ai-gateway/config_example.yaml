@@ -14,7 +14,7 @@ gateway:
 
 prompt_refiner:
   enabled: true
-  model: gemma-4-26B_q4_0-it
+  model: chat
   system_prompt_file: prompts/image_prompt_refiner.txt
   fallback_to_original_prompt: true
 
