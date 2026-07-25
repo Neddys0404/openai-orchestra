@@ -185,7 +185,7 @@ async def chat_completions(request: Request):
 
         payload = body.model_dump(exclude_unset=True)
 
-        logger.info(
+        logger.warning(
             "Effective sampling (%s): temp=%s, top_p=%s, max_tokens=%s",
             model_name,
             payload.get("temperature", "<server default>"),
@@ -255,7 +255,7 @@ async def completions(request: Request):
 
         payload = body.model_dump(exclude_unset=True)
 
-        logger.info(
+        logger.warning(
             "Effective completion parameters (%s): temperature=%s, top_p=%s, max_tokens=%s",
             model_name,
             payload.get("temperature", "<server default>"),
