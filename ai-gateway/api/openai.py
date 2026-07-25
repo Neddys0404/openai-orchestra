@@ -182,12 +182,23 @@ async def chat_completions(request: Request):
         endpoint = await model_manager.get_endpoint(model_name)
         body.model = model_name
         timeout = model_manager.registry.get(model_name).timeout
+
+        payload = body.model_dump(exclude_unset=True)
+
+        logger.info(
+            "Effective sampling (%s): temp=%s, top_p=%s, max_tokens=%s",
+            model_name,
+            payload.get("temperature", "<server default>"),
+            payload.get("top_p", "<server default>"),
+            payload.get("max_tokens", "<server default>"),
+        )
+
         if body.stream:
             streaming = True
             return StreamingResponse(
 			    _stream_response(
         			endpoint,
-        			body.model_dump(exclude_unset=True),
+        			payload,
         			timeout,
         			session_id,
         			original_messages,
@@ -199,7 +210,7 @@ async def chat_completions(request: Request):
         # Non‑streaming path
         response = await client.completion(
         	endpoint,
-    		body.model_dump(exclude_unset=True),
+    		payload,
     		timeout,
 		)
         if session_id:
@@ -241,14 +252,25 @@ async def completions(request: Request):
     try:
         endpoint = await model_manager.get_endpoint(model_name)
         timeout = model_manager.registry.get(model_name).timeout
+
+        payload = body.model_dump(exclude_unset=True)
+
+        logger.info(
+            "Effective completion parameters (%s): temperature=%s, top_p=%s, max_tokens=%s",
+            model_name,
+            payload.get("temperature", "<server default>"),
+            payload.get("top_p", "<server default>"),
+            payload.get("max_tokens", "<server default>"),
+        )
+
         if body.stream:
             streaming = True
             return StreamingResponse(
-                _stream_text_completion_response(endpoint, body, timeout, model_name),
+                _stream_text_completion_response(endpoint, payload, timeout, model_name),
                 media_type="text/event-stream",
                 headers={"X-Model-Route": "explicit", "Cache-Control": "no-cache"},
             )
-        return await client.text_completion(endpoint, body, timeout)
+        return await client.text_completion(endpoint, payload, timeout)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
