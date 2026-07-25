@@ -39,7 +39,7 @@ class ChatCompletionRequest(BaseModel):
 class CompletionRequest(BaseModel):
     model: str = Field(..., description="Explicit model name.")
     prompt: str = Field(..., min_length=1)
-	temperature: float | None = None
+    temperature: float | None = None
     top_p: float | None = None
     max_tokens: int | None = None
     n: int = 1
