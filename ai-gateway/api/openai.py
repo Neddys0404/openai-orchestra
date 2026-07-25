@@ -120,7 +120,7 @@ async def chat_completions(request: Request):
     try:
         body_obj = await request.json()
         body = ChatCompletionRequest(**body_obj)
-        original_messages = [msg.dict() for msg in body.messages]
+        original_messages = [msg.model_dump() for msg in body.messages]
     except Exception as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -135,7 +135,7 @@ async def chat_completions(request: Request):
             # ``SessionManager.context`` returns a list of dicts; convert back to Message objects.
             context_msgs = await session_manager.context(session_id, original_messages)
             body.messages = [Message(**m) for m in context_msgs]
-        routing_messages = [msg.dict() for msg in body.messages]
+        routing_messages = [msg.model_dump() for msg in body.messages]
         if not body.model or body.model in {"auto", "gateway"}:
             await model_manager.get_endpoint(router_manager.classifier_model)
         model_name, route = await router_manager.choose_model(body.model, routing_messages)
@@ -185,12 +185,23 @@ async def chat_completions(request: Request):
         if body.stream:
             streaming = True
             return StreamingResponse(
-                _stream_response(endpoint, body.dict(), timeout, session_id, original_messages, model_name),
-                media_type="text/event-stream",
-                headers={"X-Model-Route": route, "Cache-Control": "no-cache"},
-            )
+			    _stream_response(
+        			endpoint,
+        			body.model_dump(exclude_unset=True),
+        			timeout,
+        			session_id,
+        			original_messages,
+        			model_name,
+    			),
+    			media_type="text/event-stream",
+    			headers={"X-Model-Route": route, "Cache-Control": "no-cache"},
+			)
         # Non‑streaming path
-        response = await client.completion(endpoint, body.dict(), timeout)
+        response = await client.completion(
+        	endpoint,
+    		body.model_dump(exclude_unset=True),
+    		timeout,
+		)
         if session_id:
             assistant_messages = [choice.get("message") for choice in response.get("choices", []) if choice.get("message")]
             await session_manager.save(session_id, original_messages + assistant_messages)
