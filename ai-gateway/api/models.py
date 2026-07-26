@@ -8,9 +8,9 @@ added later without breaking existing clients.
 
 from __future__ import annotations
 
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class TextContentPart(BaseModel):
@@ -31,6 +31,7 @@ MessageContent = str | list[TextContentPart | ImageContentPart]
 
 
 class Message(BaseModel):
+    model_config = ConfigDict(extra="allow")
     role: str = Field(..., description="The role of the message sender.")
     content: MessageContent = Field(
         ...,
@@ -39,8 +40,14 @@ class Message(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
     model: Optional[str] = Field(None, description="Explicit model name or 'auto' for classifier routing.")
     messages: List[Message] = Field(..., min_items=1)
+    tools: list[Any] | None = None
+    tool_choice: str | dict[str, Any] | None = None
+    stream_options: dict[str, Any] | None = None
+    parallel_tool_calls: bool | None = None
+    response_format: dict[str, Any] | None = None
     stream: bool = False
     n: int | None = None
     temperature: float | None = None

@@ -187,7 +187,9 @@ async def chat_completions(request: Request):
         body.model = model_name
         timeout = model_manager.registry.get(model_name).timeout
 
-        payload = body.model_dump(exclude_unset=True)
+        payload = body_obj.copy()
+
+        payload.update(body.model_dump(exclude_unset=True))
 
         logger.warning(
             "===== FORWARDED PAYLOAD =====\n%s",
@@ -266,7 +268,9 @@ async def completions(request: Request):
         endpoint = await model_manager.get_endpoint(model_name)
         timeout = model_manager.registry.get(model_name).timeout
 
-        payload = body.model_dump(exclude_unset=True)
+        payload = body_obj.copy()
+
+        payload.update(body.model_dump(exclude_unset=True))
 
         logger.warning(
             "===== FORWARDED PAYLOAD =====\n%s",
