@@ -8,14 +8,34 @@ added later without breaking existing clients.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
+
+
+class TextContentPart(BaseModel):
+    type: Literal["text"]
+    text: str
+
+
+class ImageUrl(BaseModel):
+    url: str
+
+
+class ImageContentPart(BaseModel):
+    type: Literal["image_url"]
+    image_url: ImageUrl
+
+
+MessageContent = str | list[TextContentPart | ImageContentPart]
 
 
 class Message(BaseModel):
     role: str = Field(..., description="The role of the message sender.")
-    content: str = Field(..., description="The textual content of the message.")
+    content: MessageContent = Field(
+        ...,
+        description="Message content as plain text or OpenAI content parts.",
+    )
 
 
 class ChatCompletionRequest(BaseModel):
@@ -29,9 +49,10 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
 
-    @validator("n")
-    def _positive_n(cls, v):
-        if v <= 0:
+    @field_validator("n")
+    @classmethod
+    def _positive_n(cls, v: int | None):
+        if v is not None and v <= 0:
             raise ValueError("n must be positive")
         return v
 
@@ -45,9 +66,10 @@ class CompletionRequest(BaseModel):
     n: int = 1
     stream: bool = False
 
-    @validator("n")
-    def _positive_n(cls, v):
-        if v <= 0:
+    @field_validator("n")
+    @classmethod
+    def _positive_n(cls, v: int | None):
+        if v is not None and v <= 0:
             raise ValueError("n must be positive")
         return v
 
@@ -58,8 +80,9 @@ class ImageGenerationRequest(BaseModel):
     size: str = "1024x1024"
     response_format: str = "b64_json"
 
-    @validator("n")
-    def _positive_n(cls, v):
+    @field_validator("n")
+    @classmethod
+    def _image_n(cls, v: int):
         if v != 1:
             raise ValueError("Only n=1 is supported for image generation.")
         return v
