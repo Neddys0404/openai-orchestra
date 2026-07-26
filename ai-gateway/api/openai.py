@@ -119,6 +119,10 @@ async def chat_completions(request: Request):
     authorize(request)
     try:
         body_obj = await request.json()
+        logger.warning(
+            "Incoming request:\n%s",
+            json.dumps(body_obj, indent=2),
+        )
         body = ChatCompletionRequest(**body_obj)
         original_messages = [msg.model_dump() for msg in body.messages]
     except Exception as error:
@@ -186,6 +190,11 @@ async def chat_completions(request: Request):
         payload = body.model_dump(exclude_unset=True)
 
         logger.warning(
+            "===== FORWARDED PAYLOAD =====\n%s",
+            json.dumps(payload, indent=2),
+        )
+
+        logger.warning(
             "Effective sampling (%s): temp=%s, top_p=%s, max_tokens=%s",
             model_name,
             payload.get("temperature", "<server default>"),
@@ -241,6 +250,10 @@ async def completions(request: Request):
     authorize(request)
     try:
         body_obj = await request.json()
+        logger.warning(
+            "Incoming request:\n%s",
+            json.dumps(body_obj, indent=2),
+        )
         body = CompletionRequest(**body_obj)
         model_name = body.model
     except Exception as error:
@@ -254,6 +267,11 @@ async def completions(request: Request):
         timeout = model_manager.registry.get(model_name).timeout
 
         payload = body.model_dump(exclude_unset=True)
+
+        logger.warning(
+            "===== FORWARDED PAYLOAD =====\n%s",
+            json.dumps(payload, indent=2),
+        )
 
         logger.warning(
             "Effective completion parameters (%s): temperature=%s, top_p=%s, max_tokens=%s",

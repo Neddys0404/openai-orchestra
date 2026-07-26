@@ -9,6 +9,14 @@ class UpstreamClient:
     async def completion(self, endpoint: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(f"{endpoint}/chat/completions", json=payload)
+
+            logger = logging.getLogger(__name__)
+
+            logger.warning(
+                "===== RAW UPSTREAM RESPONSE =====\n%s",
+                response.text,
+            )
+
             response.raise_for_status()
             return response.json()
 
