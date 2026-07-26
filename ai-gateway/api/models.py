@@ -33,10 +33,7 @@ MessageContent = str | list[TextContentPart | ImageContentPart]
 class Message(BaseModel):
     model_config = ConfigDict(extra="allow")
     role: str = Field(..., description="The role of the message sender.")
-    content: MessageContent = Field(
-        ...,
-        description="Message content as plain text or OpenAI content parts.",
-    )
+    content: MessageContent = None
 
 
 class ChatCompletionRequest(BaseModel):
