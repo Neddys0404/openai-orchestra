@@ -27,13 +27,20 @@ class ImageContentPart(BaseModel):
     image_url: ImageUrl
 
 
-MessageContent = str | list[TextContentPart | ImageContentPart]
+MessageContent = (
+    str
+    | list[TextContentPart | ImageContentPart]
+    | None
+)
 
 
 class Message(BaseModel):
     model_config = ConfigDict(extra="allow")
     role: str = Field(..., description="The role of the message sender.")
-    content: MessageContent = None
+    content: MessageContent = Field(
+        ...,
+        description="Message content as plain text or OpenAI content parts.",
+    )
 
 
 class ChatCompletionRequest(BaseModel):
