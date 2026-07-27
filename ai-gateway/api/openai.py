@@ -141,6 +141,7 @@ async def chat_completions(request: Request):
         model_name, route = await router_manager.choose_model(body.model, routing_messages)
         if route == "image_gen":
             logger.warning("Intent classified: image_gen")
+            logger.warning(f"Received n = {body.n}")
             if body.n != 1:
                 raise HTTPException(status_code=400, detail="Classified image generation supports only n=1.")
             refiner_config = model_manager.config.get("prompt_refiner", {})
