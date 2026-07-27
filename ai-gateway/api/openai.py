@@ -140,9 +140,9 @@ async def chat_completions(request: Request):
             await model_manager.get_endpoint(router_manager.classifier_model)
         model_name, route = await router_manager.choose_model(body.model, routing_messages)
         if route == "image_gen":
+            logger.warning("Intent classified: image_gen")
             if body.n != 1:
                 raise HTTPException(status_code=400, detail="Classified image generation supports only n=1.")
-            logger.warning("Intent classified: image_gen")
             refiner_config = model_manager.config.get("prompt_refiner", {})
             original_prompt = next(
                 (_prompt_from_message(message) for message in reversed(routing_messages) if message.get("role") == "user"),
