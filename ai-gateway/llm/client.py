@@ -12,11 +12,6 @@ class UpstreamClient:
 
             logger = logging.getLogger(__name__)
 
-            logger.warning(
-                "===== RAW UPSTREAM RESPONSE =====\n%s",
-                response.text,
-            )
-
             response.raise_for_status()
             return response.json()
 

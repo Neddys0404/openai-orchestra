@@ -119,10 +119,6 @@ async def chat_completions(request: Request):
     authorize(request)
     try:
         body_obj = await request.json()
-        logger.warning(
-            "Incoming request:\n%s",
-            json.dumps(body_obj, indent=2),
-        )
         body = ChatCompletionRequest(**body_obj)
         original_messages = [msg.model_dump() for msg in body.messages]
     except Exception as error:
@@ -146,7 +142,7 @@ async def chat_completions(request: Request):
         if route == "image_gen":
             if body.n != 1:
                 raise HTTPException(status_code=400, detail="Classified image generation supports only n=1.")
-            logger.info("Intent classified: image_gen")
+            logger.warning("Intent classified: image_gen")
             refiner_config = model_manager.config.get("prompt_refiner", {})
             original_prompt = next(
                 (_prompt_from_message(message) for message in reversed(routing_messages) if message.get("role") == "user"),
@@ -168,20 +164,20 @@ async def chat_completions(request: Request):
                     model_manager.registry.get(refiner_model).timeout,
                     refiner_model,
                 )
-                logger.info("Prompt refinement complete in %.3fs.", time.monotonic() - refinement_started)
+                logger.warning("Prompt refinement complete in %.3fs.", time.monotonic() - refinement_started)
             except (RuntimeError, ValueError, httpx.HTTPError) as error:
                 logger.warning("Prompt refinement failed after %.3fs: %s", time.monotonic() - refinement_started, error)
                 if not refiner_config.get("fallback_to_original_prompt", True):
                     raise HTTPException(status_code=502, detail="Image prompt refinement failed.") from error
-                logger.info("Using original prompt after refinement failure.")
-            logger.info("Sending refined prompt to image backend.")
+                logger.warning("Using original prompt after refinement failure.")
+            logger.warning("Sending refined prompt to image backend.")
             response = await generate_image(
                 refined_prompt,
                 body.size,
                 body.response_format,
                 str(request.base_url),
             )
-            logger.info("Image generation finished.")
+            logger.warning("Image generation finished.")
             return response
         endpoint = await model_manager.get_endpoint(model_name)
         body.model = model_name
@@ -190,11 +186,6 @@ async def chat_completions(request: Request):
         payload = body_obj.copy()
 
         payload.update(body.model_dump(exclude_unset=True))
-
-        logger.warning(
-            "===== FORWARDED PAYLOAD =====\n%s",
-            json.dumps(payload, indent=2),
-        )
 
         logger.warning(
             "Effective sampling (%s): temp=%s, top_p=%s, max_tokens=%s",
@@ -252,10 +243,6 @@ async def completions(request: Request):
     authorize(request)
     try:
         body_obj = await request.json()
-        logger.warning(
-            "Incoming request:\n%s",
-            json.dumps(body_obj, indent=2),
-        )
         body = CompletionRequest(**body_obj)
         model_name = body.model
     except Exception as error:
@@ -271,11 +258,6 @@ async def completions(request: Request):
         payload = body_obj.copy()
 
         payload.update(body.model_dump(exclude_unset=True))
-
-        logger.warning(
-            "===== FORWARDED PAYLOAD =====\n%s",
-            json.dumps(payload, indent=2),
-        )
 
         logger.warning(
             "Effective completion parameters (%s): temperature=%s, top_p=%s, max_tokens=%s",
