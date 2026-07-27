@@ -307,4 +307,6 @@ async def list_models(request: Request):
         for image_id in image_ids:
             if isinstance(image_id, str) and image_id and not any(model["id"] == image_id for model in models):
                 models.append({"id": image_id, "object": "model", "owned_by": "ai-gateway-image"})
+    # add auto also as a model selection for client to choose auto routing mode.
+    models.append({"id": "auto", "object": "model", "owned_by": "ai-gateway-image"})
     return {"object": "list", "data": models}
