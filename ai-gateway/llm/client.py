@@ -10,8 +10,6 @@ class UpstreamClient:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(f"{endpoint}/chat/completions", json=payload)
 
-            logger = logging.getLogger(__name__)
-
             response.raise_for_status()
             return response.json()
 
