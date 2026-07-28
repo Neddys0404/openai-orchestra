@@ -137,8 +137,10 @@ async def chat_completions(request: Request):
             body.messages = [Message(**m) for m in context_msgs]
         routing_messages = [msg.model_dump() for msg in body.messages]
         if not body.model or body.model in {"auto", "gateway"}:
+            logger.warning("\n\nSelected Model are auto, proceed to classifier model\n\n")
             await model_manager.get_endpoint(router_manager.classifier_model)
         model_name, route = await router_manager.choose_model(body.model, routing_messages)
+        logger.warning(f"\n\nClassified Model are {model_name} and route: {route}.\n\n")
         if route == "image_gen":
             logger.warning("Intent classified: image_gen")
             logger.warning(f"Received n = {body.n}")
