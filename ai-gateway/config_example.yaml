@@ -31,7 +31,7 @@ models:
       -m "/mnt/storage120/models/router/qwen2.5-3b-instruct-q4_k_m.gguf"
       --host 127.0.0.1
       --port 9000
-      -c 1024
+      -c 4096
       -ngl 0
 
   chat:
