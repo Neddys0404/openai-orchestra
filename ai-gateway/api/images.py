@@ -66,7 +66,7 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
         process.kill()
         await asyncio.shield(process.wait())
 
-
+# TODO: image_gen route stuck here and return status code 400.
 async def generate_image(prompt: str, size: str, response_format: str, base_url: str):
     if response_format not in {"url", "b64_json"}:
         raise HTTPException(status_code=400, detail="response_format must be 'url' or 'b64_json'.")
