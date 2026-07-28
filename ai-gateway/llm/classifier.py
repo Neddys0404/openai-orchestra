@@ -180,6 +180,33 @@ class LLMClassifier:
             User: Help me look for this product's information.
             Route: chat
 
+            User: Explain this ESP-IDF panic.
+            Route: coder
+
+            User: Help me configure FreeRTOS.
+            Route: coder
+
+            User: What is MQTT?
+            Route: chat
+
+            User: Which MCU should I use?
+            Route: chat
+
+            User: Write an MQTT client in C.
+            Route: coder
+
+            User: Explain how Stable Diffusion works.
+            Route: chat
+
+            User: Compare Flux and SDXL.
+            Route: chat
+
+            User: Generate an SDXL prompt.
+            Route: chat
+
+            User: Generate an image using SDXL.
+            Route: image_gen
+
         Negative Examples:
 
             "Write a README" -> chat
@@ -192,26 +219,26 @@ class LLMClassifier:
             "Make a PowerPoint" -> chat
             "Create an icon for my app" -> image_gen
 
-        Decision process:
+        Decision Tree
 
-            A. Is the user requesting creation or modification of an image?
-            → image_gen
+            1. Is the requested OUTPUT an image?
+                -> image_gen
 
-            Else:
+            2. Else, is the requested OUTPUT code, configuration, scripts, software engineering help, debugging, APIs, firmware, DevOps, or implementation guidance?
+                -> coder
 
-            B. Is the user's primary task software engineering, programming, scripting, debugging, configuration, or code explanation?
-            → coder
-
-            Else:
-            → chat
+            3. Otherwise
+                -> chat
 
         Classification rules:
 
             1. Choose image_gen whenever the user is asking for an image to be created or modified.
-            2. Choose coder whenever the primary task is software development.
-            3. Otherwise choose chat.
-            4. If multiple topics are present, classify according to the PRIMARY requested output.
-            5. If uncertain, choose chat.
+            2. Technical knowledge without software-development intent → chat.
+            3. Technical knowledge for programming or implementation → coder.
+            4. Choose coder whenever the primary task is software development.
+            5. Otherwise choose chat.
+            6. If multiple topics are present, classify according to the PRIMARY requested output.
+            7. If uncertain, choose chat.
 
         Valid outputs:
             {routes}
