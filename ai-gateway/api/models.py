@@ -60,6 +60,10 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
 
+    # Only for auto image
+    size: str | None = None
+    image_response_format: Literal["url", "b64_json"] | None = None
+
     @field_validator("n")
     @classmethod
     def _positive_n(cls, v: int | None):
