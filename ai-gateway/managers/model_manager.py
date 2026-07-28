@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import time
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ import yaml
 
 from models.registry import ModelRegistry
 
+logger = logging.getLogger(__name__)
 
 class ModelManager:
     """Serializes GPU model switching and owns only processes it launches."""
@@ -125,6 +127,8 @@ class ModelManager:
             popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             popen_options["start_new_session"] = True
+
+        logger.warning("Launching:\n%s", model.start_command)
         self._processes[model_name] = subprocess.Popen(model.start_command, **popen_options)
         process = self._processes[model_name]
         deadline = time.monotonic() + model.startup_timeout
