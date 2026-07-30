@@ -215,6 +215,7 @@ The Tool System allows you to extend your AI workflow with local system commands
 ### Known Limitations
 *   **Experimental Tools**: The Tool System is currently in development and should be used with caution.
 *   **Image Generation Performance**: Running SD-CLI on CPU is significantly slower; high-performance setups require dedicated GPU allocation for the diffusion process.
+*   **llama-server process persistent**: Reloading the llama-server parameters sometimes requires pkill llama-server as it was not killed when the service is stopped.
 
 ### Common Issues
 *   **401 Unauthorized**: Ensure `AI_GATEWAY_API_KEY` matches your request's Bearer token.
