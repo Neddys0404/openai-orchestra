@@ -69,7 +69,7 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
 # TODO: image_gen route stuck here and return status code 400.
 async def generate_image(prompt: str, size: str, response_format: str, base_url: str):
 
-    print(f"\n\nResponse Format: {response_format}\n\n")
+    
 
     if response_format not in {"url", "b64_json"}:
         raise HTTPException(status_code=400, detail="response_format must be 'url' or 'b64_json'.")
@@ -80,6 +80,7 @@ async def generate_image(prompt: str, size: str, response_format: str, base_url:
     try:
         # The diffusion runtime shares GPU resources with managed answer models.
         await model_manager.unload_nonpersistent_models()
+        print(f"\n\nImage size received: {size}\n\n")
         job = image_generator.prepare(prompt, size)
         output_file = job.output_file
         log = job.log_file.open("w", encoding="utf-8")
