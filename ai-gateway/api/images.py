@@ -182,7 +182,7 @@ async def stream_generate_image(
 
             now = time.monotonic()
             if now >= next_status_at:
-                yield {"type": "progress", "content": "Generating image"}
+                yield {"type": "progress", "content": "Generating image...\n"}
                 next_status_at = now + 5
 
         remaining = deadline - time.monotonic()
