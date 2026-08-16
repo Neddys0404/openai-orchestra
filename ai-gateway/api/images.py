@@ -140,12 +140,13 @@ async def stream_generate_image(
 ) -> AsyncIterator[dict[str, Any]]:
     """Tee sd-cli output to the job log and yield progress plus the final image response.
 
-    Events have either ``type == 'progress'`` and a text ``content``, or
-    ``type == 'result'`` and an OpenAI Images API-shaped ``response``.
+    At most one fixed ``Generating image`` progress event is emitted every
+    five seconds. All sd-cli output remains in the job log only.
     """
     size, response_format = _validate_image_options(size, response_format)
     process: asyncio.subprocess.Process | None = None
     log: TextIO | None = None
+    read_task: asyncio.Task[bytes] | None = None
     try:
         await model_manager.unload_nonpersistent_models()
         job = image_generator.prepare(prompt, size)
@@ -161,21 +162,28 @@ async def stream_generate_image(
         )
         assert process.stdout is not None
         deadline = time.monotonic() + job.timeout_seconds
-        previous_progress = ""
+        next_status_at = time.monotonic() + 5
+        read_task = asyncio.create_task(process.stdout.readline())
         while True:
-            remaining = deadline - time.monotonic()
+            now = time.monotonic()
+            remaining = deadline - now
             if remaining <= 0:
                 raise TimeoutError
-            line = await asyncio.wait_for(process.stdout.readline(), timeout=remaining)
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace")
-            log.write(text)
-            log.flush()
-            progress = text.strip()
-            if progress and progress != previous_progress:
-                previous_progress = progress
-                yield {"type": "progress", "content": progress}
+            wait_seconds = min(remaining, max(0, next_status_at - now))
+            done, _ = await asyncio.wait({read_task}, timeout=wait_seconds)
+            if read_task in done:
+                line = read_task.result()
+                if not line:
+                    break
+                text = line.decode("utf-8", errors="replace")
+                log.write(text)
+                log.flush()
+                read_task = asyncio.create_task(process.stdout.readline())
+
+            now = time.monotonic()
+            if now >= next_status_at:
+                yield {"type": "progress", "content": "Generating image"}
+                next_status_at = now + 5
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -200,6 +208,12 @@ async def stream_generate_image(
     except OSError as error:
         raise HTTPException(status_code=502, detail=f"Unable to start image generator: {error}") from error
     finally:
+        if read_task is not None and not read_task.done():
+            read_task.cancel()
+            try:
+                await read_task
+            except asyncio.CancelledError:
+                pass
         if process is not None:
             await _stop_process(process)
         if log is not None:

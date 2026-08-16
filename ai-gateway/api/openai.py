@@ -157,7 +157,7 @@ async def _stream_image_chat_response(
         yield _image_stream_chunk(completion_id, model_name, {"role": "assistant"})
         async for event in stream_generate_image(prompt, size, response_format, base_url):
             if event["type"] == "progress":
-                yield _image_stream_chunk(completion_id, model_name, {"content": f"{event['content']}\n"})
+                yield _image_stream_chunk(completion_id, model_name, {"content": event["content"]})
             else:
                 yield _image_stream_chunk(
                     completion_id,
