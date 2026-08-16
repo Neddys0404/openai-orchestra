@@ -181,7 +181,7 @@ async def chat_completions(request: Request):
             response = await generate_image(
                 refined_prompt,
                 body.size,
-                body.response_format,
+                "b64_json", # To be tested. originally: body.image_response_format
                 str(request.base_url),
             )
             logger.warning("Image generation finished.")
