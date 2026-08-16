@@ -180,7 +180,7 @@ async def chat_completions(request: Request):
             logger.warning("Sending refined prompt to image backend.")
             response = await generate_image(
                 refined_prompt,
-                body.size,
+                "1024x1024", # fixed for now, should be dynamic but this require frontend to adapt
                 "b64_json", # To be tested. originally: body.image_response_format
                 str(request.base_url),
             )
