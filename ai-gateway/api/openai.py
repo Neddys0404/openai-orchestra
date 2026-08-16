@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import time
+import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +16,7 @@ import httpx
 from api.auth import authorize
 from llm.client import UpstreamClient
 from llm.prompt_refiner import ImagePromptRefiner
-from api.images import generate_image
+from api.images import generate_image, stream_generate_image
 from .models import ChatCompletionRequest, CompletionRequest, ImageGenerationRequest, Message
 from tools.tool_router import ToolRouter
 from managers.model_manager import model_manager
@@ -114,6 +116,68 @@ async def _stream_text_completion_response(
         model_manager.release_request(model_name)
 
 
+def _sse(data: dict[str, Any]) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+
+
+def _image_stream_chunk(
+    completion_id: str,
+    model_name: str,
+    delta: dict[str, Any],
+    finish_reason: str | None = None,
+) -> str:
+    return _sse(
+        {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model_name,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+        }
+    )
+
+
+def _image_result_content(response: dict[str, Any], response_format: str) -> str:
+    image = response["data"][0]
+    if response_format == "url":
+        return f"![Generated image]({image['url']})"
+    return f"![Generated image](data:image/png;base64,{image['b64_json']})"
+
+
+async def _stream_image_chat_response(
+    prompt: str,
+    size: str,
+    response_format: str,
+    base_url: str,
+    model_name: str,
+) -> AsyncIterator[str]:
+    """Convert image-generator events into OpenAI chat-completion SSE chunks."""
+    completion_id = f"chatcmpl-{uuid.uuid4().hex}"
+    try:
+        yield _image_stream_chunk(completion_id, model_name, {"role": "assistant"})
+        async for event in stream_generate_image(prompt, size, response_format, base_url):
+            if event["type"] == "progress":
+                yield _image_stream_chunk(completion_id, model_name, {"content": f"{event['content']}\n"})
+            else:
+                yield _image_stream_chunk(
+                    completion_id,
+                    model_name,
+                    {"content": _image_result_content(event["response"], response_format)},
+                )
+        yield _image_stream_chunk(completion_id, model_name, {}, "stop")
+        yield "data: [DONE]\n\n"
+    except asyncio.CancelledError:
+        raise
+    except HTTPException as error:
+        logger.exception("Streaming image generation failed")
+        yield _sse({"error": {"message": str(error.detail), "type": "server_error", "code": "image_generation_failed"}})
+        yield "data: [DONE]\n\n"
+    except Exception as error:
+        logger.exception("Streaming image generation failed")
+        yield _sse({"error": {"message": str(error), "type": "server_error", "code": "image_generation_failed"}})
+        yield "data: [DONE]\n\n"
+
+
 @router.post("/chat/completions")
 async def chat_completions(request: Request):
     authorize(request)
@@ -128,6 +192,7 @@ async def chat_completions(request: Request):
     await model_manager._request_semaphore.acquire()
     await model_manager.acquire_request()
     streaming = False
+    stream_owns_request_slot = False
     model_name: str | None = None
     try:
         session_id = request.headers.get("x-session-id")
@@ -178,10 +243,35 @@ async def chat_completions(request: Request):
                     raise HTTPException(status_code=502, detail="Image prompt refinement failed.") from error
                 logger.warning("Using original prompt after refinement failure.")
             logger.warning("Sending refined prompt to image backend.")
+            image_size = "1024x1024"
+            image_response_format = "b64_json"
+            if body.stream:
+                streaming = True
+                stream_owns_request_slot = True
+
+                async def image_stream() -> AsyncIterator[str]:
+                    try:
+                        async for event in _stream_image_chat_response(
+                            refined_prompt,
+                            image_size,
+                            image_response_format,
+                            str(request.base_url),
+                            model_name or "image_gen",
+                        ):
+                            yield event
+                    finally:
+                        model_manager.release_request(model_name)
+                        model_manager._request_semaphore.release()
+
+                return StreamingResponse(
+                    image_stream(),
+                    media_type="text/event-stream",
+                    headers={"X-Model-Route": route, "Cache-Control": "no-cache"},
+                )
             response = await generate_image(
                 refined_prompt,
-                "1024x1024", # fixed for now, should be dynamic but this require frontend to adapt
-                "b64_json", # To be tested. originally: body.image_response_format
+                image_size,
+                image_response_format,
                 str(request.base_url),
             )
             logger.warning("Image generation finished.")
@@ -237,7 +327,8 @@ async def chat_completions(request: Request):
     finally:
         if not streaming:
             model_manager.release_request(model_name)
-        model_manager._request_semaphore.release()
+        if not stream_owns_request_slot:
+            model_manager._request_semaphore.release()
 
 
 @router.post("/completions")

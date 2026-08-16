@@ -18,8 +18,9 @@ import asyncio
 import base64
 import os
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -66,13 +67,29 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
         process.kill()
         await asyncio.shield(process.wait())
 
-# TODO: image_gen route stuck here and return status code 400.
-async def generate_image(prompt: str, size: str, response_format: str, base_url: str):
-
-    
-
+def _validate_image_options(size: str | None, response_format: str | None) -> tuple[str, str]:
+    size = size or "1024x1024"
+    response_format = response_format or "b64_json"
     if response_format not in {"url", "b64_json"}:
         raise HTTPException(status_code=400, detail="response_format must be 'url' or 'b64_json'.")
+    return size, response_format
+
+
+def _image_response(output_file: Path, response_format: str, base_url: str) -> dict[str, Any]:
+    if response_format == "b64_json":
+        encoded_image = base64.b64encode(output_file.read_bytes()).decode("ascii")
+        return {"created": int(time.time()), "data": [{"b64_json": encoded_image}]}
+
+    url_base = canonical_base_url or base_url
+    image_url = f"{url_base.rstrip('/')}/v1/images/{output_file.name}"
+    return {"created": int(time.time()), "data": [{"url": image_url}]}
+
+
+async def generate_image(
+    prompt: str, size: str | None, response_format: str | None, base_url: str
+) -> dict[str, Any]:
+    """Generate an image without streaming, preserving the Images API response."""
+    size, response_format = _validate_image_options(size, response_format)
 
     process: asyncio.subprocess.Process | None = None
     log: TextIO | None = None
@@ -114,15 +131,80 @@ async def generate_image(prompt: str, size: str, response_format: str, base_url:
             log.write(f"\nFinished: {time.time()}\nExit Code: {process.returncode if process else 'not started'}\n")
             log.close()
 
-    if response_format == "b64_json":
-        assert output_file is not None
-        encoded_image = base64.b64encode(output_file.read_bytes()).decode("ascii")
-        return {"created": int(time.time()), "data": [{"b64_json": encoded_image}]}
     assert output_file is not None
-    # Use canonical base URL if configured, otherwise fall back to request base.
-    url_base = canonical_base_url or base_url
-    image_url = f"{url_base.rstrip('/')}/v1/images/{output_file.name}"
-    return {"created": int(time.time()), "data": [{"url": image_url}]}
+    return _image_response(output_file, response_format, base_url)
+
+
+async def stream_generate_image(
+    prompt: str, size: str | None, response_format: str | None, base_url: str
+) -> AsyncIterator[dict[str, Any]]:
+    """Tee sd-cli output to the job log and yield progress plus the final image response.
+
+    Events have either ``type == 'progress'`` and a text ``content``, or
+    ``type == 'result'`` and an OpenAI Images API-shaped ``response``.
+    """
+    size, response_format = _validate_image_options(size, response_format)
+    process: asyncio.subprocess.Process | None = None
+    log: TextIO | None = None
+    try:
+        await model_manager.unload_nonpersistent_models()
+        job = image_generator.prepare(prompt, size)
+        log = job.log_file.open("w", encoding="utf-8")
+        log.write(f"Started: {time.time()}\nOutput: {job.output_file}\n\n")
+        log.flush()
+        process = await asyncio.create_subprocess_exec(
+            *job.command,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=job.environment,
+        )
+        assert process.stdout is not None
+        deadline = time.monotonic() + job.timeout_seconds
+        previous_progress = ""
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError
+            line = await asyncio.wait_for(process.stdout.readline(), timeout=remaining)
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace")
+            log.write(text)
+            log.flush()
+            progress = text.strip()
+            if progress and progress != previous_progress:
+                previous_progress = progress
+                yield {"type": "progress", "content": progress}
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        await asyncio.wait_for(process.wait(), timeout=remaining)
+        if process.returncode:
+            raise RuntimeError(f"Image generation failed with exit code {process.returncode}. See {job.log_file}.")
+        if not job.output_file.is_file():
+            raise RuntimeError(f"Image generator exited successfully but did not create {job.output_file}.")
+        yield {
+            "type": "result",
+            "response": _image_response(job.output_file, response_format, base_url),
+        }
+    except TimeoutError as error:
+        if process is not None:
+            await _stop_process(process)
+        raise HTTPException(status_code=504, detail="Image generation timed out.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except OSError as error:
+        raise HTTPException(status_code=502, detail=f"Unable to start image generator: {error}") from error
+    finally:
+        if process is not None:
+            await _stop_process(process)
+        if log is not None:
+            log.write(f"\nFinished: {time.time()}\nExit Code: {process.returncode if process else 'not started'}\n")
+            log.close()
 
 
 @router.post("/generations")
