@@ -2,12 +2,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from starlette.requests import Request
 
 from api.auth import authorize
+import api.images as images
 from api.images import ImageResult, make_images_response
 from tools.image_tools import ImageGenerator
 
@@ -154,6 +156,22 @@ class ImageGeneratorTests(unittest.TestCase):
 
 
 class ImageResponseSerializationTests(unittest.TestCase):
+    def test_signed_image_url_allows_fetch_without_api_key_until_expiry(self):
+        with patch.object(images, "image_url_signing_secret", "test-secret"), patch.object(
+            images, "image_url_ttl_seconds", 60
+        ), patch("api.images.time.time", return_value=1_000):
+            url = images._image_url("generated.png", "http://gateway/")
+            request = Request(
+                {"type": "http", "query_string": urlsplit(url).query.encode(), "headers": []}
+            )
+
+            self.assertTrue(images._has_valid_image_signature("generated.png", request))
+
+        with patch.object(images, "image_url_signing_secret", "test-secret"), patch(
+            "api.images.time.time", return_value=1_061
+        ):
+            self.assertFalse(images._has_valid_image_signature("generated.png", request))
+
     def test_images_api_keeps_b64_json_support(self):
         with tempfile.TemporaryDirectory() as directory:
             image_path = Path(directory) / "generated.png"

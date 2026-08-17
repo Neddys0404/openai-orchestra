@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, TextIO
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -37,6 +40,10 @@ image_config = model_manager.config.get("image_generation", {})
 image_generator = ImageGenerator(image_config)
 cleanup_seconds: int = int(image_config.get("cleanup_seconds", 86400))
 canonical_base_url: str | None = image_config.get("base_url")
+image_url_ttl_seconds: int = int(image_config.get("signed_url_ttl_seconds", 300))
+image_url_signing_secret = image_config.get("signed_url_secret") or model_manager.config.get(
+    "gateway", {}
+).get("api_key")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +54,41 @@ class ImageResult:
     filename: str
     url: str
     path: Path
+
+
+def _image_url(filename: str, base_url: str) -> str:
+    """Build a short-lived, signed URL for a generated image."""
+    if not isinstance(image_url_signing_secret, str) or not image_url_signing_secret:
+        raise RuntimeError(
+            "Image URL signing requires image_generation.signed_url_secret "
+            "or gateway.api_key."
+        )
+    expires = int(time.time()) + image_url_ttl_seconds
+    payload = f"{filename}:{expires}".encode("utf-8")
+    signature = hmac.new(
+        image_url_signing_secret.encode("utf-8"), payload, hashlib.sha256
+    ).hexdigest()
+    url_base = canonical_base_url or base_url
+    query = urlencode({"expires": expires, "signature": signature})
+    return f"{url_base.rstrip('/')}/v1/images/{filename}?{query}"
+
+
+def _has_valid_image_signature(image_name: str, request: Request) -> bool:
+    """Return whether a request carries a valid, unexpired image URL signature."""
+    if not isinstance(image_url_signing_secret, str) or not image_url_signing_secret:
+        return False
+    try:
+        expires = int(request.query_params["expires"])
+        provided_signature = request.query_params["signature"]
+    except (KeyError, TypeError, ValueError):
+        return False
+    if expires < int(time.time()):
+        return False
+    payload = f"{image_name}:{expires}".encode("utf-8")
+    expected_signature = hmac.new(
+        image_url_signing_secret.encode("utf-8"), payload, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(provided_signature, expected_signature)
 
 
 async def _stop_process(process: asyncio.subprocess.Process) -> None:
@@ -128,11 +170,10 @@ async def generate_image(
             log.close()
 
     assert output_file is not None
-    url_base = canonical_base_url or base_url
     return ImageResult(
         created=int(time.time()),
         filename=output_file.name,
-        url=f"{url_base.rstrip('/')}/v1/images/{output_file.name}",
+        url=_image_url(output_file.name, base_url),
         path=output_file,
     )
 
@@ -200,7 +241,7 @@ async def stream_generate_image(
             "image": ImageResult(
                 created=int(time.time()),
                 filename=job.output_file.name,
-                url=f"{(canonical_base_url or base_url).rstrip('/')}/v1/images/{job.output_file.name}",
+                url=_image_url(job.output_file.name, base_url),
                 path=job.output_file,
             ),
         }
@@ -247,9 +288,10 @@ async def create_image(request: ImageGenerationRequest, raw_request: Request):
 
 @router.get("/{image_name}")
 async def get_image(image_name: str, request: Request):
-    authorize(request)
     if Path(image_name).name != image_name or not image_name.endswith(".png"):
         raise HTTPException(status_code=404, detail="Image not found.")
+    if not _has_valid_image_signature(image_name, request):
+        authorize(request)
     output_file = image_generator.output_directory() / image_name
     if not output_file.is_file():
         raise HTTPException(status_code=404, detail="Image not found.")

@@ -97,6 +97,11 @@ image_generation:
     clip_on_cpu: true
     vae_on_cpu: true
     timeout_seconds: 900
+    # Links sent to chat clients expire after five minutes and can be fetched
+    # without the API key. Set a dedicated long random value in production;
+    # otherwise the gateway API key is used as the signing secret.
+    signed_url_ttl_seconds: 300
+    # signed_url_secret: "replace-with-a-long-random-secret"
     max_prompt_characters: 8000
     allowed_sizes: ["1024x1024"]
     cfg_scale: 1.0
