@@ -155,12 +155,14 @@ def make_chat_completion_response(image: ImageResult, model_name: str) -> dict[s
     }
 
 
-def _image_chat_content(image: ImageResult) -> list[dict[str, Any]]:
-    """Return structured assistant content without Markdown or data URIs."""
-    return [
-        {"type": "text", "text": "I've generated your image."},
-        {"type": "image_url", "image_url": {"url": image.url}},
-    ]
+def _image_chat_content(image: ImageResult) -> str:
+    """Return portable chat text without Markdown or embedded image data.
+
+    Chat Completions streams text deltas. The generated image remains available
+    through the gateway's Images API URL, which a frontend may render as a link
+    or preview without needing to parse a non-standard assistant image part.
+    """
+    return f"I've generated your image: {image.url}"
 
 
 async def _stream_image_chat_response(

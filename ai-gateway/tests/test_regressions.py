@@ -164,7 +164,7 @@ class ImageResponseSerializationTests(unittest.TestCase):
 
             self.assertEqual(response, {"created": 1, "data": [{"b64_json": "aW1hZ2UtYnl0ZXM="}]})
 
-    def test_chat_completion_uses_structured_url_content(self):
+    def test_chat_completion_uses_url_text_content(self):
         image = ImageResult(1, "generated.png", "http://gateway/v1/images/generated.png", Path("generated.png"))
 
         response = make_chat_completion_response(image, "image-model")
@@ -172,7 +172,7 @@ class ImageResponseSerializationTests(unittest.TestCase):
         message = response["choices"][0]["message"]
         self.assertEqual(response["object"], "chat.completion")
         self.assertEqual(message["role"], "assistant")
-        self.assertEqual(message["content"][1], {"type": "image_url", "image_url": {"url": image.url}})
+        self.assertEqual(message["content"], f"I've generated your image: {image.url}")
 
 
 class ImageGenerationVRAMTests(unittest.IsolatedAsyncioTestCase):
