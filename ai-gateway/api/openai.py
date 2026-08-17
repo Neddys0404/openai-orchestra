@@ -16,8 +16,8 @@ import httpx
 from api.auth import authorize
 from llm.client import UpstreamClient
 from llm.prompt_refiner import ImagePromptRefiner
-from api.images import generate_image, stream_generate_image
-from .models import ChatCompletionRequest, CompletionRequest, ImageGenerationRequest, Message
+from api.images import ImageResult, generate_image, stream_generate_image
+from .models import ChatCompletionRequest, CompletionRequest, Message
 from tools.tool_router import ToolRouter
 from managers.model_manager import model_manager
 from managers.router_manager import RouterManager
@@ -137,17 +137,35 @@ def _image_stream_chunk(
     )
 
 
-def _image_result_content(response: dict[str, Any], response_format: str) -> str:
-    image = response["data"][0]
-    if response_format == "url":
-        return f"![Generated image]({image['url']})"
-    return f"![Generated image](data:image/png;base64,{image['b64_json']})"
+def make_chat_completion_response(image: ImageResult, model_name: str) -> dict[str, Any]:
+    """Serialize an ImageResult as a non-streaming Chat Completions response."""
+    return {
+        "id": f"chatcmpl-{uuid.uuid4().hex}",
+        "object": "chat.completion",
+        "created": image.created,
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": _image_chat_content(image)},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
+
+
+def _image_chat_content(image: ImageResult) -> list[dict[str, Any]]:
+    """Return structured assistant content without Markdown or data URIs."""
+    return [
+        {"type": "text", "text": "I've generated your image."},
+        {"type": "image_url", "image_url": {"url": image.url}},
+    ]
 
 
 async def _stream_image_chat_response(
     prompt: str,
     size: str,
-    response_format: str,
     base_url: str,
     model_name: str,
 ) -> AsyncIterator[str]:
@@ -155,14 +173,14 @@ async def _stream_image_chat_response(
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
     try:
         yield _image_stream_chunk(completion_id, model_name, {"role": "assistant"})
-        async for event in stream_generate_image(prompt, size, response_format, base_url):
+        async for event in stream_generate_image(prompt, size, base_url):
             if event["type"] == "progress":
                 yield _image_stream_chunk(completion_id, model_name, {"content": event["content"]})
             else:
                 yield _image_stream_chunk(
                     completion_id,
                     model_name,
-                    {"content": _image_result_content(event["response"], response_format)},
+                    {"content": _image_chat_content(event["image"])},
                 )
         yield _image_stream_chunk(completion_id, model_name, {}, "stop")
         yield "data: [DONE]\n\n"
@@ -244,7 +262,6 @@ async def chat_completions(request: Request):
                 logger.warning("Using original prompt after refinement failure.")
             logger.warning("Sending refined prompt to image backend.")
             image_size = "1024x1024"
-            image_response_format = "b64_json"
             if body.stream:
                 streaming = True
                 stream_owns_request_slot = True
@@ -254,7 +271,6 @@ async def chat_completions(request: Request):
                         async for event in _stream_image_chat_response(
                             refined_prompt,
                             image_size,
-                            image_response_format,
                             str(request.base_url),
                             model_name or "image_gen",
                         ):
@@ -268,14 +284,13 @@ async def chat_completions(request: Request):
                     media_type="text/event-stream",
                     headers={"X-Model-Route": route, "Cache-Control": "no-cache"},
                 )
-            response = await generate_image(
+            image = await generate_image(
                 refined_prompt,
                 image_size,
-                image_response_format,
                 str(request.base_url),
             )
             logger.warning("Image generation finished.")
-            return response
+            return make_chat_completion_response(image, model_name or "image_gen")
         endpoint = await model_manager.get_endpoint(model_name)
         body.model = model_name
         timeout = model_manager.registry.get(model_name).timeout

@@ -62,7 +62,6 @@ class ChatCompletionRequest(BaseModel):
 
     # Only for auto image
     size: str | None = None
-    image_response_format: Literal["url", "b64_json"] | None = None
 
     @field_validator("n")
     @classmethod

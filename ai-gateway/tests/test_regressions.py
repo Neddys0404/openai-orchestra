@@ -8,9 +8,10 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from api.auth import authorize
+from api.images import ImageResult, make_images_response
 from tools.image_tools import ImageGenerator
 
-from api.openai import _stream_content
+from api.openai import _stream_content, make_chat_completion_response
 from llm.prompt_refiner import ImagePromptRefiner
 from managers.router_manager import RouterManager
 from managers.session_manager import SessionManager
@@ -150,6 +151,28 @@ class ImageGeneratorTests(unittest.TestCase):
             })
             job = generator.prepare("a test image", "1024x1024")
             self.assertEqual(job.environment["CUDA_VISIBLE_DEVICES"], "")
+
+
+class ImageResponseSerializationTests(unittest.TestCase):
+    def test_images_api_keeps_b64_json_support(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image_path = Path(directory) / "generated.png"
+            image_path.write_bytes(b"image-bytes")
+            image = ImageResult(1, image_path.name, "http://gateway/v1/images/generated.png", image_path)
+
+            response = make_images_response(image, "b64_json")
+
+            self.assertEqual(response, {"created": 1, "data": [{"b64_json": "aW1hZ2UtYnl0ZXM="}]})
+
+    def test_chat_completion_uses_structured_url_content(self):
+        image = ImageResult(1, "generated.png", "http://gateway/v1/images/generated.png", Path("generated.png"))
+
+        response = make_chat_completion_response(image, "image-model")
+
+        message = response["choices"][0]["message"]
+        self.assertEqual(response["object"], "chat.completion")
+        self.assertEqual(message["role"], "assistant")
+        self.assertEqual(message["content"][1], {"type": "image_url", "image_url": {"url": image.url}})
 
 
 class ImageGenerationVRAMTests(unittest.IsolatedAsyncioTestCase):

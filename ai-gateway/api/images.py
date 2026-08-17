@@ -16,19 +16,19 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import os
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Literal, TextIO
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
 
 from managers.model_manager import model_manager
 from tools.image_tools import ImageGenerator
 from .auth import authorize
+from .models import ImageGenerationRequest
 
 router = APIRouter()
 
@@ -39,22 +39,14 @@ cleanup_seconds: int = int(image_config.get("cleanup_seconds", 86400))
 canonical_base_url: str | None = image_config.get("base_url")
 
 
-class ImageGenerationRequest(BaseModel):
-    prompt: str = Field(min_length=1)
-    n: int = 1
-    size: str = "1024x1024"
-    response_format: str = "b64_json"
+@dataclass(frozen=True, slots=True)
+class ImageResult:
+    """Endpoint-neutral representation of one generated image."""
 
-    @staticmethod
-    def validate_n(value: int) -> int:
-        if value != 1:
-            raise ValueError("Only n=1 is supported for image generation.")
-        return value
-
-    # Pydantic validator for the ``n`` field
-    @staticmethod
-    def _validate_n(cls, v: int) -> int:  # pragma: no cover - simple validation
-        return ImageGenerationRequest.validate_n(v)
+    created: int
+    filename: str
+    url: str
+    path: Path
 
 
 async def _stop_process(process: asyncio.subprocess.Process) -> None:
@@ -67,29 +59,32 @@ async def _stop_process(process: asyncio.subprocess.Process) -> None:
         process.kill()
         await asyncio.shield(process.wait())
 
-def _validate_image_options(size: str | None, response_format: str | None) -> tuple[str, str]:
-    size = size or "1024x1024"
+def _validate_image_size(size: str | None) -> str:
+    return size or "1024x1024"
+
+
+def _validate_images_response_format(response_format: str | None) -> Literal["url", "b64_json"]:
     response_format = response_format or "b64_json"
     if response_format not in {"url", "b64_json"}:
         raise HTTPException(status_code=400, detail="response_format must be 'url' or 'b64_json'.")
-    return size, response_format
+    return response_format
 
 
-def _image_response(output_file: Path, response_format: str, base_url: str) -> dict[str, Any]:
+def make_images_response(
+    image: ImageResult, response_format: Literal["url", "b64_json"]
+) -> dict[str, Any]:
+    """Serialize an ImageResult for the Images API only."""
     if response_format == "b64_json":
-        encoded_image = base64.b64encode(output_file.read_bytes()).decode("ascii")
-        return {"created": int(time.time()), "data": [{"b64_json": encoded_image}]}
-
-    url_base = canonical_base_url or base_url
-    image_url = f"{url_base.rstrip('/')}/v1/images/{output_file.name}"
-    return {"created": int(time.time()), "data": [{"url": image_url}]}
+        encoded_image = base64.b64encode(image.path.read_bytes()).decode("ascii")
+        return {"created": image.created, "data": [{"b64_json": encoded_image}]}
+    return {"created": image.created, "data": [{"url": image.url}]}
 
 
 async def generate_image(
-    prompt: str, size: str | None, response_format: str | None, base_url: str
-) -> dict[str, Any]:
-    """Generate an image without streaming, preserving the Images API response."""
-    size, response_format = _validate_image_options(size, response_format)
+    prompt: str, size: str | None, base_url: str
+) -> ImageResult:
+    """Generate an image and return an endpoint-neutral internal result."""
+    size = _validate_image_size(size)
 
     process: asyncio.subprocess.Process | None = None
     log: TextIO | None = None
@@ -133,18 +128,24 @@ async def generate_image(
             log.close()
 
     assert output_file is not None
-    return _image_response(output_file, response_format, base_url)
+    url_base = canonical_base_url or base_url
+    return ImageResult(
+        created=int(time.time()),
+        filename=output_file.name,
+        url=f"{url_base.rstrip('/')}/v1/images/{output_file.name}",
+        path=output_file,
+    )
 
 
 async def stream_generate_image(
-    prompt: str, size: str | None, response_format: str | None, base_url: str
+    prompt: str, size: str | None, base_url: str
 ) -> AsyncIterator[dict[str, Any]]:
-    """Tee sd-cli output to the job log and yield progress plus the final image response.
+    """Tee sd-cli output to the job log and yield progress plus an ImageResult.
 
     At most one fixed ``Generating image`` progress event is emitted every
     five seconds. All sd-cli output remains in the job log only.
     """
-    size, response_format = _validate_image_options(size, response_format)
+    size = _validate_image_size(size)
     process: asyncio.subprocess.Process | None = None
     log: TextIO | None = None
     read_task: asyncio.Task[bytes] | None = None
@@ -196,7 +197,12 @@ async def stream_generate_image(
             raise RuntimeError(f"Image generator exited successfully but did not create {job.output_file}.")
         yield {
             "type": "result",
-            "response": _image_response(job.output_file, response_format, base_url),
+            "image": ImageResult(
+                created=int(time.time()),
+                filename=job.output_file.name,
+                url=f"{(canonical_base_url or base_url).rstrip('/')}/v1/images/{job.output_file.name}",
+                path=job.output_file,
+            ),
         }
     except TimeoutError as error:
         if process is not None:
@@ -227,11 +233,13 @@ async def create_image(request: ImageGenerationRequest, raw_request: Request):
     authorize(raw_request)
     await model_manager.acquire_request()
     try:
-        return await generate_image(
+        image = await generate_image(
             request.prompt,
             request.size,
-            request.response_format,
             str(raw_request.base_url),
+        )
+        return make_images_response(
+            image, _validate_images_response_format(request.response_format)
         )
     finally:
         model_manager.release_request()
