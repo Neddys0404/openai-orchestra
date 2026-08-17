@@ -75,7 +75,7 @@ When enabled, `POST /tool/git` and `POST /tool/docker` accept a JSON body such a
 
 ## Image generation
 
-`POST /v1/images/generations` exposes the configured `stable-diffusion.cpp` Qwen Image runtime through the OpenAI Images API. The sample `image_generation` configuration is populated from the local paths in this project; update it if your runtime paths differ. The gateway passes the prompt as one command argument (not through a shell), creates a PNG and log file in `output_directory`, and unloads a gateway-managed GPU answer model before running the job.
+`POST /v1/images/generations` exposes the configured `stable-diffusion.cpp` Qwen Image runtime through the OpenAI Images API. The sample `image_generation` configuration is populated from the local paths in this project; update it if your runtime paths differ. The gateway passes the prompt as one command argument (not through a shell), creates a PNG and log file in `output_directory`, and waits for active API sessions to complete before stopping every model process it started, including persistent models, before running the job. Model servers started outside the gateway are never stopped because the gateway cannot safely manage them.
 
 The classified `image_gen` chat flow is separate from this direct endpoint. It loads or reuses `prompt_refiner.model`, reads its system prompt from `prompt_refiner.system_prompt_file`, and sends the refined prompt to the same image backend. Set `fallback_to_original_prompt: false` to return an error when refinement fails. Direct `POST /v1/images/generations` requests are never classified or refined.
 

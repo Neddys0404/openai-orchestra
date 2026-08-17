@@ -95,8 +95,9 @@ async def generate_image(
     log: TextIO | None = None
     output_file: Path | None = None
     try:
-        # The diffusion runtime shares GPU resources with managed answer models.
-        await model_manager.unload_nonpersistent_models()
+        # The request lock is held by the caller.  It first lets active
+        # sessions finish, then releases every gateway-owned model's VRAM.
+        await model_manager.release_models_for_image_generation()
         print(f"\n\nImage size received: {size}\n\n")
         job = image_generator.prepare(prompt, size)
         output_file = job.output_file
@@ -148,7 +149,7 @@ async def stream_generate_image(
     log: TextIO | None = None
     read_task: asyncio.Task[bytes] | None = None
     try:
-        await model_manager.unload_nonpersistent_models()
+        await model_manager.release_models_for_image_generation()
         job = image_generator.prepare(prompt, size)
         log = job.log_file.open("w", encoding="utf-8")
         log.write(f"Started: {time.time()}\nOutput: {job.output_file}\n\n")
@@ -182,7 +183,7 @@ async def stream_generate_image(
 
             now = time.monotonic()
             if now >= next_status_at:
-                yield {"type": "progress", "content": "Generating image...\n"}
+                yield {"type": "progress", "content": "Generating image...<br>\n"}
                 next_status_at = now + 5
 
         remaining = deadline - time.monotonic()

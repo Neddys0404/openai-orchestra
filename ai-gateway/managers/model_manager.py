@@ -164,11 +164,24 @@ class ModelManager:
                 if not self.registry.get(model_name).persistent and now - last_used > timeout:
                     await self.unload_model(model_name)
 
-    async def unload_nonpersistent_models(self) -> None:
-        """Release gateway-owned GPU answer models for an external GPU workload."""
+    async def release_models_for_image_generation(self) -> None:
+        """Release every gateway-owned model once all active requests have drained.
+
+        Image requests must have acquired ``_request_lock`` before calling this
+        method.  That lock is held for the lifetime of a normal or streaming
+        request, so reaching this point means no other session is using a
+        managed model.  Persistent models are included deliberately: keeping a
+        classifier warm is useful for chat routing, but it must not reserve
+        VRAM while the image runtime needs the GPU.
+
+        Only processes launched by this gateway are stopped.  A model server
+        started outside the gateway is never in ``_processes`` and therefore
+        cannot be safely released here.
+        """
+        if not self._request_lock.locked():
+            raise RuntimeError("Image generation must acquire the request lock before releasing models.")
         for model_name in list(self._processes):
-            if not self.registry.get(model_name).persistent:
-                await self.unload_model(model_name)
+            await self.unload_model(model_name)
 
     async def unload_model(self, model_name: str) -> bool:
         """Stop a gateway-owned process group, releasing the model's VRAM."""

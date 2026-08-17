@@ -14,6 +14,7 @@ from api.openai import _stream_content
 from llm.prompt_refiner import ImagePromptRefiner
 from managers.router_manager import RouterManager
 from managers.session_manager import SessionManager
+from managers.model_manager import ModelManager
 
 
 class StreamingTests(unittest.TestCase):
@@ -149,6 +150,42 @@ class ImageGeneratorTests(unittest.TestCase):
             })
             job = generator.prepare("a test image", "1024x1024")
             self.assertEqual(job.environment["CUDA_VISIBLE_DEVICES"], "")
+
+
+class ImageGenerationVRAMTests(unittest.IsolatedAsyncioTestCase):
+    async def test_releases_all_gateway_owned_models_after_request_lock_is_acquired(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.yaml"
+            config_path.write_text(
+                """models:
+  persistent:
+    endpoint: http://127.0.0.1:9000/v1
+    persistent: true
+  chat:
+    endpoint: http://127.0.0.1:8001/v1
+""",
+                encoding="utf-8",
+            )
+            manager = ModelManager(config_path)
+            manager._processes = {"persistent": object(), "chat": object()}
+            await manager.acquire_request()
+            try:
+                with patch.object(manager, "unload_model", new=AsyncMock()) as unload_model:
+                    await manager.release_models_for_image_generation()
+                self.assertCountEqual(
+                    [call.args[0] for call in unload_model.await_args_list],
+                    ["persistent", "chat"],
+                )
+            finally:
+                manager.release_request()
+
+    async def test_refuses_to_release_models_without_exclusive_request_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.yaml"
+            config_path.write_text("models: {}\n", encoding="utf-8")
+            manager = ModelManager(config_path)
+            with self.assertRaisesRegex(RuntimeError, "acquire the request lock"):
+                await manager.release_models_for_image_generation()
 
 
 if __name__ == "__main__":
