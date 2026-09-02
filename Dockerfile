@@ -1,6 +1,7 @@
 FROM nvidia/cuda:13.1.1-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV LIBRARY_PATH="/usr/local/cuda/targets/x86_64-linux/lib/stubs:${LIBRARY_PATH}"
 
 # ============================================================
 # System dependencies
