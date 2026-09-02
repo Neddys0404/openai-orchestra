@@ -22,6 +22,10 @@ RUN apt-get update && apt-get install -y \
     cuda-driver-dev-13-1 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ln -sf \
+    /usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs/libcuda.so \
+    /usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs/libcuda.so.1
+
 # ============================================================
 # Build llama.cpp with CUDA support
 # ============================================================
