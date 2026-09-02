@@ -127,6 +127,8 @@ The test container should report the same NVIDIA GPU visible from `nvidia-smi` o
 
 **### Build the image**
 
+Note: known good commit of llama.cpp = 9400c8946e4da5e7694f2c26d6d4e50e14b690fa
+
 From the project root:
 
 \`\`\`bash

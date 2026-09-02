@@ -57,7 +57,7 @@ RUN cmake -B build \
 
 WORKDIR /opt
 
-RUN git clone https://github.com/leejet/stable-diffusion.cpp.git
+RUN git clone --recurse-submodules https://github.com/leejet/stable-diffusion.cpp.git
 
 WORKDIR /opt/stable-diffusion.cpp
 
