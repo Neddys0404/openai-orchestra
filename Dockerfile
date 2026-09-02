@@ -1,7 +1,10 @@
 FROM nvidia/cuda:13.1.1-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LIBRARY_PATH="/usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs:${LIBRARY_PATH}"
+ENV CUDA_STUB_DIR=/usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs
+
+ENV LIBRARY_PATH="${CUDA_STUB_DIR}:${LIBRARY_PATH}"
+ENV LDFLAGS="-L${CUDA_STUB_DIR} -Wl,-rpath-link,${CUDA_STUB_DIR}"
 
 # ============================================================
 # System dependencies
@@ -22,10 +25,6 @@ RUN apt-get update && apt-get install -y \
     cuda-driver-dev-13-1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf \
-    /usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs/libcuda.so \
-    /usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs/libcuda.so.1
-
 # ============================================================
 # Build llama.cpp with CUDA support
 # ============================================================
@@ -40,6 +39,9 @@ RUN cmake -B build \
     -DGGML_CUDA=ON \
     -DCMAKE_BUILD_TYPE=Release \
     -G Ninja \
+    -DCMAKE_CUDA_ARCHITECTURES=120 \
+    -DCMAKE_EXE_LINKER_FLAGS="-L${CUDA_STUB_DIR} -Wl,-rpath-link,${CUDA_STUB_DIR}" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-L${CUDA_STUB_DIR} -Wl,-rpath-link,${CUDA_STUB_DIR}" \
     && cmake --build build --config Release -j$(nproc)
 
 
@@ -57,6 +59,9 @@ RUN cmake -B build \
     -DGGML_CUDA=ON \
     -DCMAKE_BUILD_TYPE=Release \
     -G Ninja \
+    -DCMAKE_CUDA_ARCHITECTURES=120 \
+    -DCMAKE_EXE_LINKER_FLAGS="-L${CUDA_STUB_DIR} -Wl,-rpath-link,${CUDA_STUB_DIR}" \
+    -DCMAKE_SHARED_LINKER_FLAGS="-L${CUDA_STUB_DIR} -Wl,-rpath-link,${CUDA_STUB_DIR}" \
     && cmake --build build --config Release -j$(nproc)
 
 
