@@ -264,7 +264,6 @@ async def chat_completions(request: Request):
                 logger.warning("Using original prompt after refinement failure.")
             image_size = "1024x1024"
             model_manager.release_request(refiner_model)
-            model_manager.release_request(refiner_model)
             logger.warning("Released prompt refiner model; sending prompt to image backend.")
             if body.stream:
                 streaming = True
