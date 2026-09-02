@@ -1,6 +1,7 @@
 FROM nvidia/cuda:13.1.1-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV LIBRARY_PATH="/usr/local/cuda-13.1/targets/x86_64-linux/lib/stubs:${LIBRARY_PATH}"
 
 # ============================================================
 # System dependencies
@@ -20,7 +21,6 @@ RUN apt-get update && apt-get install -y \
     curl \
     cuda-driver-dev-13-1 \
     && rm -rf /var/lib/apt/lists/*
-
 
 # ============================================================
 # Build llama.cpp with CUDA support
