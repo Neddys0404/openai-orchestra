@@ -173,30 +173,67 @@ async def _stream_image_chat_response(
 ) -> AsyncIterator[str]:
     """Convert image-generator events into OpenAI chat-completion SSE chunks."""
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
+
     try:
-        yield _image_stream_chunk(completion_id, model_name, {"role": "assistant"})
+        yield _image_stream_chunk(
+            completion_id,
+            model_name,
+            {"role": "assistant"},
+        )
+
         async for event in stream_generate_image(prompt, size, base_url):
-            if event["type"] == "progress":
-                yield _image_stream_chunk(completion_id, model_name, {"content": event["content"]})
+
+            if event["type"] == "thinking":
+                yield _image_stream_chunk(
+                    completion_id,
+                    model_name,
+                    {
+                        "reasoning_content": event["content"],
+                    },
+                )
+
             else:
                 yield _image_stream_chunk(
                     completion_id,
                     model_name,
-                    {"content": _image_chat_content(event["image"])},
+                    {
+                        "content": _image_chat_content(event["image"]),
+                    },
                 )
-        yield _image_stream_chunk(completion_id, model_name, {}, "stop")
-        yield "data: [DONE]\n\n"
-    except asyncio.CancelledError:
-        raise
-    except HTTPException as error:
-        logger.exception("Streaming image generation failed")
-        yield _sse({"error": {"message": str(error.detail), "type": "server_error", "code": "image_generation_failed"}})
-        yield "data: [DONE]\n\n"
-    except Exception as error:
-        logger.exception("Streaming image generation failed")
-        yield _sse({"error": {"message": str(error), "type": "server_error", "code": "image_generation_failed"}})
+
+        yield _image_stream_chunk(
+            completion_id,
+            model_name,
+            {},
+            "stop",
+        )
+
         yield "data: [DONE]\n\n"
 
+    except asyncio.CancelledError:
+        raise
+
+    except HTTPException as error:
+        logger.exception("Streaming image generation failed")
+        yield _sse({
+            "error": {
+                "message": str(error.detail),
+                "type": "server_error",
+                "code": "image_generation_failed",
+            }
+        })
+        yield "data: [DONE]\n\n"
+
+    except Exception as error:
+        logger.exception("Streaming image generation failed")
+        yield _sse({
+            "error": {
+                "message": str(error),
+                "type": "server_error",
+                "code": "image_generation_failed",
+            }
+        })
+        yield "data: [DONE]\n\n"
 
 @router.post("/chat/completions")
 async def chat_completions(request: Request):
@@ -262,7 +299,7 @@ async def chat_completions(request: Request):
                 if not refiner_config.get("fallback_to_original_prompt", True):
                     raise HTTPException(status_code=502, detail="Image prompt refinement failed.") from error
                 logger.warning("Using original prompt after refinement failure.")
-                
+
             image_size = "1024x1024"
             logger.warning("Sending refined prompt to image backend.")
 
