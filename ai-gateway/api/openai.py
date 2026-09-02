@@ -262,8 +262,10 @@ async def chat_completions(request: Request):
                 if not refiner_config.get("fallback_to_original_prompt", True):
                     raise HTTPException(status_code=502, detail="Image prompt refinement failed.") from error
                 logger.warning("Using original prompt after refinement failure.")
-            logger.warning("Sending refined prompt to image backend.")
             image_size = "1024x1024"
+            model_manager.release_request(refiner_model)
+            model_manager.release_request(refiner_model)
+            logger.warning("Released prompt refiner model; sending prompt to image backend.")
             if body.stream:
                 streaming = True
                 stream_owns_request_slot = True
@@ -278,7 +280,6 @@ async def chat_completions(request: Request):
                         ):
                             yield event
                     finally:
-                        model_manager.release_request(model_name)
                         model_manager._request_semaphore.release()
 
                 return StreamingResponse(
