@@ -106,5 +106,5 @@ EXPOSE 8000
 # ============================================================
 # Start FastAPI gateway
 # ============================================================
-
+ENV LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
 CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
