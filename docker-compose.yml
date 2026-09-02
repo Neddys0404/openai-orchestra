@@ -10,8 +10,8 @@ services:
       - ./ai-gateway/config.yaml:/app/config.yaml:ro
       - ./logs:/app/logs
       # If config points at local models/output, mount those too:
-      # - /path/to/models:/models:ro
-      # - /path/to/outputs:/app/output_directory
+      - ./models:/models:ro
+      - ./ImageGen:/app/ImageGen:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
