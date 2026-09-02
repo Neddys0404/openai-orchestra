@@ -1,1 +1,4 @@
 .env
+models/*
+
+!models/readme.txt
