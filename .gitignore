@@ -1,4 +1,5 @@
 .env
 models/*
+DockerFile
 
 !models/readme.txt
