@@ -1,5 +1,6 @@
 .env
 models/*
 DockerFile
+docker-compose.yml
 
 !models/readme.txt
