@@ -1,0 +1,33 @@
+services:
+  ai-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ai-gateway
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY}
+
+    volumes:
+      - ./ai-gateway/config.yaml:/app/config.yaml:ro
+      - ./logs:/app/logs
+      - ./models:/models:ro
+
+    restart: unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
