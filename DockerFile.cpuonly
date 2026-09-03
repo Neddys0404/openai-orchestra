@@ -1,0 +1,43 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System dependencies (No CUDA/NVIDIA drivers)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    build-essential \
+    cmake \
+    ninja-build \
+    pkg-config \
+    libssl-dev \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build llama.cpp (CPU Only)
+WORKDIR /opt
+RUN git clone https://github.com/ggml-org/llama.cpp.git && \
+    cd llama.cpp && \
+    cmake -B build \
+        -DGGML_CUDA=OFF \
+        -DCMAKE_BUILD_TYPE=Release \
+        -G Ninja \
+    && cmake --build build --config Release -j$(nproc)
+
+ENV PATH="/opt/llama.cpp/build/bin:${PATH}"
+
+# AI Gateway
+WORKDIR /app
+RUN mkdir -p /app/ImageGen
+COPY ai-gateway/requirements.txt .
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+COPY ai-gateway/ .
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8000
+CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
