@@ -301,7 +301,7 @@ async def chat_completions(request: Request):
                 logger.warning("Using original prompt after refinement failure.")
 
             image_size = "1024x1024"
-            logger.warning("Sending refined prompt to image backend.")
+            logger.warning("Sending prompt to image backend.")
 
             if body.stream:
                 streaming = True
