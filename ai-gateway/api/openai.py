@@ -287,6 +287,7 @@ async def chat_completions(request: Request):
                 refiner_model = router_manager.resolve_model(str(refiner_config.get("model", "chat")))
                 logger.info("Launching chat model for image prompt refinement: %s", refiner_model)
                 refiner_endpoint = await model_manager.get_endpoint(refiner_model)
+                logger.info("Prompt refiner endpoint resolved: %s", refiner_endpoint)
                 refined_prompt = await prompt_refiner.refine(
                     refiner_endpoint,
                     original_prompt,
@@ -295,9 +296,21 @@ async def chat_completions(request: Request):
                 )
                 logger.warning("Prompt refinement complete in %.3fs.", time.monotonic() - refinement_started)
             except (RuntimeError, ValueError, httpx.HTTPError) as error:
-                logger.warning("Prompt refinement failed after %.3fs: %s", time.monotonic() - refinement_started, error)
+                elapsed = time.monotonic() - refinement_started
+
+                logger.exception(
+                    "Prompt refinement failed after %.3fs [%s]: %s",
+                    elapsed,
+                    type(error).__name__,
+                    repr(error),
+                )
+
                 if not refiner_config.get("fallback_to_original_prompt", True):
-                    raise HTTPException(status_code=502, detail="Image prompt refinement failed.") from error
+                    raise HTTPException(
+                        status_code=502,
+                        detail="Image prompt refinement failed.",
+                    ) from error
+
                 logger.warning("Using original prompt after refinement failure.")
 
             image_size = "1024x1024"
