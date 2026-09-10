@@ -91,6 +91,8 @@ image_generation:
     output_directory: "/mnt/data/media/JunRen/ImageGen"
     # Uses the first CUDA GPU. Change this for a different GPU, or remove it to
     # inherit CUDA_VISIBLE_DEVICES from the service environment.
+    # max_vram_gib: 12
+    # auto_fit: false
     # cuda_visible_devices: "0"
     cpu_only: true
     offload_to_cpu: true

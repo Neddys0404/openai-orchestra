@@ -108,4 +108,9 @@ class ImageGenerator:
             cuda_visible_devices = self.config.get("cuda_visible_devices")
             if cuda_visible_devices is not None:
                 environment["CUDA_VISIBLE_DEVICES"] = str(cuda_visible_devices)
+        if self.config.get("auto_fit") is not None:
+            command.extend(["--auto-fit", "on" if self.config["auto_fit"] else "off"])
+
+        if self.config.get("max_vram_gib") is not None:
+            command.extend(["--max-vram", str(self.config["max_vram_gib"])])
         return ImageJob(command, environment, output_file, log_file, float(self.config.get("timeout_seconds", 900)))
