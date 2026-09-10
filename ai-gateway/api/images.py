@@ -226,7 +226,7 @@ async def stream_generate_image(
             now = time.monotonic()
             if now >= next_status_at:
                 yield {"type": "thinking", "content": "Generating image... Please be patient.\n<br>"} # aligned to unsloth frontend but not sure others will work or not
-                next_status_at = now + 2
+                next_status_at = now + 5
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
