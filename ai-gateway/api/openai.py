@@ -330,6 +330,7 @@ async def chat_completions(request: Request):
                         ):
                             yield event
                     finally:
+                        model_manager.release_request(model_name)
                         model_manager._request_semaphore.release()
 
                 return StreamingResponse(
